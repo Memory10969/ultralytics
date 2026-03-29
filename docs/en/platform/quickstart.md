@@ -171,7 +171,7 @@ Ultralytics Platform supports multiple upload formats (full details in [Datasets
 | Format              | Max Size (Free / Pro / Enterprise) | Description                                                                 |
 | ------------------- | ---------------------------------- | --------------------------------------------------------------------------- |
 | **Images**          | 50 MB                              | JPG, PNG, WebP, TIFF, and other common formats                              |
-| **Dataset Archive** | 10 / 20 / 50 GB                    | ZIP or TAR archive (including .tar.gz) with images and labels               |
+| **Dataset Archive** | 10 / 20 / 50 GB                    | ZIP or TAR archive (including `.tar.gz` and `.tgz`) with images and labels  |
 | **Video**           | 1 GB                               | MP4, WebM, MOV, AVI, MKV, M4V - frames extracted at ~1 fps (max 100 frames) |
 | **NDJSON**          | 10 / 20 / 50 GB                    | Ultralytics dataset export format for portable metadata                     |
 
@@ -195,7 +195,7 @@ After upload, the platform automatically processes your data:
 
 !!! tip "YOLO Dataset Structure"
 
-    For best results, upload a ZIP or TAR archive (including `.tar.gz`) with the standard YOLO structure:
+    For best results, upload a ZIP or TAR archive (including `.tar.gz` and `.tgz`) with the standard YOLO structure:
 
     ```
     my-dataset.zip
