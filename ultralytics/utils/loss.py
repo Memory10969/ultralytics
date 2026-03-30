@@ -1277,7 +1277,6 @@ class OhemCELoss(nn.Module):
         pixel_losses = pixel_losses[flat_valid_mask][order]
 
         n_min = max(int(flat_valid_mask.sum().item() * self.ratio), 1)
-        n_min = 100000
         threshold = torch.maximum(probs[min(n_min - 1, probs.numel() - 1)], self.thresh)
         selected_losses = pixel_losses[probs < threshold]
         if selected_losses.numel() == 0:
@@ -1306,7 +1305,19 @@ class SemanticSegLoss(nn.Module):
         self.nc = m.nc
         self.device = next(model.parameters()).device
         self.dtype = next(model.parameters()).dtype
-        self.ce = nn.CrossEntropyLoss(ignore_index=255)
+        self.use_ohem = bool(getattr(model.args, "use_ohem", True))
+        if self.use_ohem:
+            self.ce = OhemCELoss(
+                thresh=float(getattr(model.args, "ohem_thresh", 0.7)),
+                ratio=1 / 16,
+                ignore_index=255,
+                use_weight=True,
+                weight=cityscapes_weight,
+            ).to(device=self.device, dtype=self.dtype)
+        else:
+            self.ce = nn.CrossEntropyLoss(ignore_index=255, weight=cityscapes_weight.clone()).to(
+                device=self.device, dtype=self.dtype
+            )
         self.dice_weight = float(getattr(model.args, "dice_weight", 1.0))
         self.aux_weight = float(getattr(model.args, "aux_weight", 0.4))
 
@@ -1318,9 +1329,12 @@ class SemanticSegLoss(nn.Module):
 
     def _ce_loss(self, preds, masks):
         """Compute cross-entropy on flattened pixels to avoid the CUDA nll_loss2d path."""
-        logits = preds.permute(0, 2, 3, 1).reshape(-1, self.nc)
-        target = masks.reshape(-1)
-        return self.ce(logits, target)
+        if self.use_ohem:
+            return self.ohemce(preds, masks)
+        else:
+            logits = preds.permute(0, 2, 3, 1).reshape(-1, self.nc)
+            target = masks.reshape(-1)
+            return self.ce(logits, target)
 
     def _dice_loss(self, preds, masks):
         """Compute Dice loss excluding ignore pixels."""
@@ -1361,7 +1375,9 @@ class SemanticSegLoss(nn.Module):
         if aux_logits is not None:
             if aux_logits.shape[2:] != masks.shape[1:]:
                 aux_logits = F.interpolate(aux_logits, size=masks.shape[1:], mode="bilinear", align_corners=False)
-            aux_loss = self._ce_loss(aux_logits, masks) * self.aux_weight
+            aux_loss = (
+                self._ce_loss(aux_logits, masks)
+            ) * self.aux_weight
             total = total + aux_loss
 
         loss_items = torch.stack([ce_loss, dice_loss, aux_loss]).detach()
