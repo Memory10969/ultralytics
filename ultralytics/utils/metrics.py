@@ -479,10 +479,6 @@ class ConfusionMatrix(DataExportMixin):
         recall = tp / (tp + fn) if tp + fn else 0.0
         return {"tp": tp, "fp": fp, "fn": fn, "precision": precision, "recall": recall}
 
-    def matrix(self):
-        """Return the confusion matrix."""
-        return self.matrix
-
     def plot_matches(self, img: torch.Tensor, im_file: str, save_dir: Path) -> None:
         """Plot grid of GT, TP, FP, FN for each image.
 
