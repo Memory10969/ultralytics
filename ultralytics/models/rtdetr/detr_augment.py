@@ -138,14 +138,14 @@ class _RTDETRRandomIoUCrop:
         return self.transform(labels)
 
 
-def compute_deim_scheduled_prob(base_prob: float, epoch: int, stop_epoch: int) -> float:
-    """Linearly decay an augmentation probability to zero by the no-aug stage boundary."""
+def compute_deim_scheduled_prob(base_prob: float, epoch: int, stop_epoch: int, floor: float = 0.0) -> float:
+    """Linearly decay an augmentation probability to floor by the no-aug stage boundary."""
     base_prob = float(base_prob)
     if base_prob <= 0.0 or stop_epoch <= 0:
         return 0.0
     if epoch >= stop_epoch:
         return 0.0
-    return base_prob * max(0.0, 1.0 - (float(epoch) / float(stop_epoch)))
+    return float(floor) + (base_prob - float(floor)) * max(0.0, 1.0 - (float(epoch) / float(stop_epoch)))
 
 
 def resolve_deim_aug_scheduler(hyp: IterableSimpleNamespace | Any) -> str:
@@ -457,7 +457,7 @@ def compute_policy_epochs(hyp: IterableSimpleNamespace) -> tuple[int, int, int]:
 
     # DEIM-style policy epochs are derived on the active-augmentation span when no_aug is explicit.
     effective_epochs = stop if explicit_no_aug else epochs
-    start = min(4, max(0, effective_epochs - 1))
+    start = int(hyp.open_aug_epoch)
 
     flat_epoch = hyp.flat_epoch
     if flat_epoch is None:

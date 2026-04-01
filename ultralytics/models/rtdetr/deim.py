@@ -47,12 +47,14 @@ class _RTDETRDEIMBatchAugment:
         copyblend_prob: float,
         copyblend_epochs: tuple[int, int],
         scheduler_mode: str = "legacy",
+        decay_min_prob: float = 0.0,
     ) -> None:
         self.base_mixup_prob = float(mixup_prob)
         self.mixup_epochs = mixup_epochs
         self.base_copyblend_prob = float(copyblend_prob)
         self.copyblend_epochs = copyblend_epochs
         self.scheduler_mode = str(scheduler_mode)
+        self.decay_min_prob = float(decay_min_prob)
         self.mixup_prob = self.base_mixup_prob
         self.copyblend_prob = self.base_copyblend_prob
         self.epoch = 0
@@ -63,8 +65,8 @@ class _RTDETRDEIMBatchAugment:
         _, mixup_stop = self.mixup_epochs
         _, copyblend_stop = self.copyblend_epochs
         if self.scheduler_mode == "decay":
-            self.mixup_prob = compute_deim_scheduled_prob(self.base_mixup_prob, epoch, mixup_stop)
-            self.copyblend_prob = compute_deim_scheduled_prob(self.base_copyblend_prob, epoch, copyblend_stop)
+            self.mixup_prob = compute_deim_scheduled_prob(self.base_mixup_prob, epoch, mixup_stop, self.decay_min_prob)
+            self.copyblend_prob = compute_deim_scheduled_prob(self.base_copyblend_prob, epoch, copyblend_stop, self.decay_min_prob)
         else:
             self.mixup_prob = self.base_mixup_prob
             self.copyblend_prob = self.base_copyblend_prob
@@ -342,6 +344,7 @@ class RTDETRDEIMDataset(RTDETRDataset):
         self.mosaic_prob = float(hyp.mosaic)
         self.mixup_prob = float(hyp.mixup)
         self.copyblend_prob = float(hyp.copy_paste)
+        self.decay_min_prob = float(hyp.aug_decay_min_prob)
         self.uses_deim_batch_augments = False
         super().__init__(*args, data=data, **kwargs)
         if self.augment:
@@ -352,6 +355,7 @@ class RTDETRDEIMDataset(RTDETRDataset):
                     copyblend_prob=self.copyblend_prob,
                     copyblend_epochs=self.copyblend_epochs,
                     scheduler_mode=self.deim_aug_scheduler,
+                    decay_min_prob=self.decay_min_prob,
                 )
                 self.uses_deim_batch_augments = True
             self.set_epoch(0)
@@ -376,9 +380,9 @@ class RTDETRDEIMDataset(RTDETRDataset):
         if self.deim_aug_scheduler == "decay":
             _, mixup_stop = self.mixup_epochs
             _, copy_paste_stop = self.copyblend_epochs
-            hyp.mosaic = compute_deim_scheduled_prob(self.mosaic_prob, epoch, stop)
-            hyp.mixup = compute_deim_scheduled_prob(self.mixup_prob, epoch, mixup_stop)
-            hyp.copy_paste = compute_deim_scheduled_prob(self.copyblend_prob, epoch, copy_paste_stop)
+            hyp.mosaic = compute_deim_scheduled_prob(self.mosaic_prob, epoch, stop, self.decay_min_prob)
+            hyp.mixup = compute_deim_scheduled_prob(self.mixup_prob, epoch, mixup_stop, self.decay_min_prob)
+            hyp.copy_paste = compute_deim_scheduled_prob(self.copyblend_prob, epoch, copy_paste_stop, self.decay_min_prob)
             hyp.scale = compute_deim_scheduled_prob(float(self.base_hyp.scale), epoch, stop)
             if epoch >= stop:
                 # Match DEIM's final no-aug tail by neutralizing all remaining v8 augmentations.
