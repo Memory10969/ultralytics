@@ -132,7 +132,7 @@ class STrack(BaseTrack):
     def re_activate(self, new_track: STrack, frame_id: int, new_id: bool = False):
         """Reactivate a previously lost track using new detection data and update its state and attributes."""
         self.mean, self.covariance = self.kalman_filter.update(
-            self.mean, self.covariance, self.convert_coords(new_track.tlwh), confidence=new_track.score
+            self.mean, self.covariance, self.convert_coords(new_track.tlwh)
         )
         self.tracklet_len = 0
         self.state = TrackState.Tracked
@@ -163,7 +163,7 @@ class STrack(BaseTrack):
 
         new_tlwh = new_track.tlwh
         self.mean, self.covariance = self.kalman_filter.update(
-            self.mean, self.covariance, self.convert_coords(new_tlwh), confidence=new_track.score
+            self.mean, self.covariance, self.convert_coords(new_tlwh)
         )
         self.state = TrackState.Tracked
         self.is_activated = True
