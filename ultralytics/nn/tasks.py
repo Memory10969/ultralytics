@@ -768,7 +768,7 @@ class ReidModel(BaseModel):
             model (torch.nn.Module): Model to update.
             nc (int): New number of identity classes.
         """
-        name, m = list((model.model if hasattr(model, "model") else model).named_children())[-1]
+        _, m = list((model.model if hasattr(model, "model") else model).named_children())[-1]
         if isinstance(m, ReID):
             if m.classifier.out_features != nc:
                 m.classifier = torch.nn.Linear(m.embed_dim, nc, bias=False)
@@ -778,7 +778,17 @@ class ReidModel(BaseModel):
 
     def init_criterion(self):
         """Initialize the loss criterion for the ReidModel."""
-        return ReIDLoss(nc=self.yaml["nc"])
+        return ReIDLoss(
+            nc=self.yaml["nc"],
+            triplet_margin=getattr(self.args, "triplet_margin", 0.3),
+            label_smooth=getattr(self.args, "label_smoothing", 0.1),
+            triplet_weight=getattr(self.args, "triplet_weight", 1.0),
+            ce_weight=getattr(self.args, "ce_weight", 1.0),
+            center_weight=getattr(self.args, "center_weight", 0.0),
+            center_momentum=getattr(self.args, "center_momentum", 0.9),
+            focal_gamma=getattr(self.args, "focal_gamma", 0.0),
+            supcon_temp=getattr(self.args, "supcon_temp", 0.0),
+        )
 
 
 class RTDETRDetectionModel(DetectionModel):

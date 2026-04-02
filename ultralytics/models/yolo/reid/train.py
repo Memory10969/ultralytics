@@ -8,15 +8,14 @@ from typing import Any
 import torch
 
 from ultralytics.data import ReidDataset, build_reid_dataloader
-from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models import yolo
 from ultralytics.nn.tasks import ReidModel
-from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
-from ultralytics.utils.plotting import plot_images
+from ultralytics.utils import DEFAULT_CFG, RANK
 from ultralytics.utils.torch_utils import is_parallel, torch_distributed_zero_first
+from ..classify.train import ClassificationTrainer
 
 
-class ReidTrainer(BaseTrainer):
+class ReidTrainer(ClassificationTrainer):
     """Trainer for person re-identification models.
 
     Extends BaseTrainer with ReID-specific dataset handling (Market-1501), PK batch sampling,
@@ -51,22 +50,8 @@ class ReidTrainer(BaseTrainer):
 
     def set_model_attributes(self):
         """Set the model's identity names and configure loss from trainer args."""
-        nc = self.data["nc"]
-        self.model.names = {i: str(i) for i in range(nc)}
-        # Configure loss criterion with trainer args
-        from ultralytics.utils.loss import ReIDLoss
-
-        self.model.criterion = ReIDLoss(
-            nc=self.data["nc"],
-            triplet_margin=getattr(self.args, "triplet_margin", 0.3),
-            label_smooth=getattr(self.args, "label_smoothing", 0.1),
-            triplet_weight=getattr(self.args, "triplet_weight", 1.0),
-            ce_weight=getattr(self.args, "ce_weight", 1.0),
-            center_weight=getattr(self.args, "center_weight", 0.0),
-            center_momentum=getattr(self.args, "center_momentum", 0.9),
-            focal_gamma=getattr(self.args, "focal_gamma", 0.0),
-            supcon_temp=getattr(self.args, "supcon_temp", 0.0),
-        )
+        super().set_model_attributes
+        self.model.args = self.args
 
     def get_model(self, cfg=None, weights=None, verbose: bool = True):
         """Return a ReidModel configured for training.
@@ -128,11 +113,10 @@ class ReidTrainer(BaseTrainer):
 
         if mode == "train":
             # PK sampling: P identities x K images
+            # TODO
             p = getattr(self.args, "reid_p", 16)
             k = getattr(self.args, "reid_k", 4)
-            loader = build_reid_dataloader(
-                dataset, batch_size, self.args.workers, p=p, k=k, shuffle=True, rank=rank
-            )
+            loader = build_reid_dataloader(dataset, batch_size, self.args.workers, p=p, k=k, shuffle=True, rank=rank)
         else:
             from ultralytics.data import build_dataloader
 
@@ -146,28 +130,10 @@ class ReidTrainer(BaseTrainer):
                 self.model.transforms = loader.dataset.torch_transforms
         return loader
 
-    def preprocess_batch(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        """Preprocess a batch of images and identity labels."""
-        batch["img"] = batch["img"].to(self.device, non_blocking=self.device.type == "cuda")
-        batch["cls"] = batch["cls"].to(self.device, non_blocking=self.device.type == "cuda")
-        return batch
-
-    def progress_string(self) -> str:
-        """Return a formatted string showing training progress."""
-        return ("\n" + "%11s" * (4 + len(self.loss_names))) % (
-            "Epoch",
-            "GPU_mem",
-            *self.loss_names,
-            "Instances",
-            "Size",
-        )
-
     def get_validator(self):
         """Return a ReidValidator instance."""
         self.loss_names = ["ce_loss", "tri_loss"]
-        return yolo.reid.ReidValidator(
-            self.test_loader, self.save_dir, args=copy(self.args), _callbacks=self.callbacks
-        )
+        return yolo.reid.ReidValidator(self.test_loader, self.save_dir, args=copy(self.args), _callbacks=self.callbacks)
 
     def label_loss_items(self, loss_items=None, prefix: str = "train"):
         """Return a loss dict with labeled training loss items.
@@ -189,17 +155,3 @@ class ReidTrainer(BaseTrainer):
             return keys
         loss_items = [round(float(x), 5) for x in loss_items]
         return dict(zip(keys, loss_items))
-
-    def plot_training_samples(self, batch: dict[str, torch.Tensor], ni: int):
-        """Plot training samples with annotations.
-
-        Args:
-            batch (dict): Batch with images and labels.
-            ni (int): Batch iteration number.
-        """
-        batch["batch_idx"] = torch.arange(batch["img"].shape[0])
-        plot_images(
-            labels=batch,
-            fname=self.save_dir / f"train_batch{ni}.jpg",
-            on_plot=self.on_plot,
-        )
