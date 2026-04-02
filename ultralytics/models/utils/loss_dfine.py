@@ -550,7 +550,7 @@ class DfineLoss(nn.Module):
 
     @staticmethod
     def _sanitize_losses(losses: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        return {k: torch.nan_to_num(v, nan=0.0, posinf=0.0, neginf=0.0) for k, v in losses.items()}
+        return {k: torch.nan_to_num(v, nan=0.0) for k, v in losses.items()}
 
     def forward(
         self,
