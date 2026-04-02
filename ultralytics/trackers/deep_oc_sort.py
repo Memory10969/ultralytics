@@ -201,26 +201,7 @@ class DeepOCSORT(OCSORT):
         lost_stracks = []
         removed_stracks = []
 
-        scores = results.conf.copy()
-
-        # BoostTrack (MVA'24): boost detection scores overlapping active tracks
-        if self.tracked_stracks:
-            active_tracks = [t for t in self.tracked_stracks if t.is_activated]
-            if active_tracks:
-                track_boxes = np.array([t.xyxy for t in active_tracks])
-                det_boxes = results.xyxy if hasattr(results, 'xyxy') else None
-                if det_boxes is not None and len(det_boxes) > 0:
-                    from ultralytics.utils.metrics import bbox_ioa
-                    ious = bbox_ioa(
-                        np.ascontiguousarray(det_boxes, dtype=np.float32),
-                        np.ascontiguousarray(track_boxes, dtype=np.float32),
-                        iou=True,
-                    )
-                    max_iou = ious.max(axis=1) if ious.size > 0 else np.zeros(len(scores))
-                    # Boost: score = score + (1 - score) * max_iou * boost_factor
-                    boost_mask = max_iou > 0.3
-                    scores[boost_mask] = scores[boost_mask] + (1.0 - scores[boost_mask]) * max_iou[boost_mask] * 0.5
-
+        scores = results.conf
         remain_inds = scores >= self.args.track_high_thresh
         inds_low = scores > self.args.track_low_thresh
         inds_high = scores < self.args.track_high_thresh
