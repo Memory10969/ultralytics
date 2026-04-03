@@ -8,7 +8,7 @@ keywords: NVIDIA DALI, GPU preprocessing, Ultralytics, YOLO, YOLO26, TensorRT, T
 
 ## Introduction
 
-When deploying [Ultralytics YOLO](../models/index.md) models in production, [preprocessing](https://www.ultralytics.com/glossary/image-preprocessing) often becomes the bottleneck. While [TensorRT](../integrations/tensorrt.md) can run model [inference](../modes/predict.md) in under 1ms, the CPU-based preprocessing (resize, pad, normalize) can take 2-10ms per image, especially at high resolutions. [NVIDIA DALI](https://docs.nvidia.com/deeplearning/dali/user-guide/docs/index.html) (Data Loading Library) solves this by moving the entire preprocessing pipeline to the GPU.
+When deploying [Ultralytics YOLO](../models/index.md) models in production, [preprocessing](https://www.ultralytics.com/glossary/image-preprocessing) often becomes the bottleneck. While [TensorRT](../integrations/tensorrt.md) can run model [inference](../modes/predict.md) in just a few milliseconds, the CPU-based preprocessing (resize, pad, normalize) can take 2-10ms per image, especially at high resolutions. [NVIDIA DALI](https://docs.nvidia.com/deeplearning/dali/user-guide/docs/index.html) (Data Loading Library) solves this by moving the entire preprocessing pipeline to the GPU.
 
 This guide walks you through building DALI pipelines that exactly replicate Ultralytics YOLO preprocessing, integrating them with `model.predict()`, processing video streams, and deploying end-to-end with [Triton Inference Server](triton-inference-server.md).
 
