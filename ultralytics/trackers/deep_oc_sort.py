@@ -189,8 +189,8 @@ class DeepOCSORT(OCSORT):
             emb_dists = matching.embedding_distance(tracks, detections) / 2.0
             emb_dists[emb_dists > (1 - self.appearance_thresh)] = 1.0
             emb_dists[dists_mask] = 1.0
-            # Weighted average instead of min: gives appearance more consistent influence
-            dists = 0.6 * dists + 0.4 * emb_dists
+            # Weighted average: slightly more appearance weight
+            dists = 0.55 * dists + 0.45 * emb_dists
 
         return dists
 
