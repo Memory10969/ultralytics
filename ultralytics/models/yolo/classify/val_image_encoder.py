@@ -75,7 +75,7 @@ class ImageEncoderValidator(BaseValidator):
         """Preprocess batch: resize for student, run all teachers.
 
         Args:
-            batch (torch.Tensor): Images at teacher resolution (B, 3, 256, 256).
+            batch (torch.Tensor): Images at teacher resolution (B, 3, H, W).
 
         Returns:
             (dict): Batch with 'img', 'cls', per-teacher entries, and '_teacher_keys'.
@@ -83,7 +83,7 @@ class ImageEncoderValidator(BaseValidator):
         imgs = batch.to(self.device, non_blocking=True)
         student_imgs = (
             torch.nn.functional.interpolate(imgs, size=self.args.imgsz, mode="bilinear", antialias=True)
-            if self.args.imgsz != 256
+            if imgs.shape[-1] != self.args.imgsz
             else imgs
         )
         if self.args.half:

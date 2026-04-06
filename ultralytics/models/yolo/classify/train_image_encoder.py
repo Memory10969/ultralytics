@@ -118,6 +118,8 @@ class ImageEncoderTrainer(ClassificationTrainer):
         raw = overrides.pop("teacher_names", overrides.pop("teacher_name", "eupe:vitb16"))
         self.teacher_names = raw.split("+") if isinstance(raw, str) else raw
         self._safe_keys = [safe_key(n) for n in self.teacher_names]
+        # Augment at the largest teacher resolution so no teacher receives upscaled input
+        self._teacher_imgsz = max(TEACHER_REGISTRY[n]["imgsz"] for n in self.teacher_names)
         self.teachers = {}
         super().__init__(cfg, overrides, _callbacks)
 
@@ -192,14 +194,15 @@ class ImageEncoderTrainer(ClassificationTrainer):
                 LOGGER.info(f"  {name}: {n:.1f}M params, embed_dim={self.teachers[sk].embed_dim}")
 
     def _build_transforms(self, mode):
-        """Build shared transform at teacher resolution (256) with ImageNet normalization.
+        """Build shared transform at teacher resolution with ImageNet normalization.
 
         Same augmented image goes to both teacher and student, resized to student resolution in
         preprocess_batch (EUPE Stage 2 / DUNE / AM-RADIO convention).
         """
+        sz = self._teacher_imgsz
         if mode == "train":
             return classify_augmentations(
-                size=256,
+                size=sz,
                 mean=IMAGENET_MEAN,
                 std=IMAGENET_STD,
                 hflip=self.args.fliplr,
@@ -211,7 +214,7 @@ class ImageEncoderTrainer(ClassificationTrainer):
                 hsv_v=self.args.hsv_v,
                 interpolation="BICUBIC",
             )
-        return classify_transforms(size=256, mean=IMAGENET_MEAN, std=IMAGENET_STD, interpolation="BICUBIC")
+        return classify_transforms(size=sz, mean=IMAGENET_MEAN, std=IMAGENET_STD, interpolation="BICUBIC")
 
     def build_dataset(self, img_path: str, mode: str = "train", batch=None):
         """Build dataset from WebDataset shards or image folder.
@@ -275,11 +278,11 @@ class ImageEncoderTrainer(ClassificationTrainer):
     def preprocess_batch(self, batch):
         """Move images to device, resize for student, run all teachers.
 
-        Single augmented image at 256x256 (teacher resolution) is resized to student resolution
+        Single augmented image at teacher resolution is resized to student resolution
         via F.interpolate. Follows DUNE convention (dune/teachers/forward.py:30).
 
         Args:
-            batch (torch.Tensor): Images at teacher resolution (B, 3, 256, 256).
+            batch (torch.Tensor): Images at teacher resolution (B, 3, H, W).
 
         Returns:
             (dict): Batch with 'img', 'cls', per-teacher entries, and '_teacher_keys'.
@@ -288,7 +291,7 @@ class ImageEncoderTrainer(ClassificationTrainer):
         # Resize to student resolution if different (DUNE: dune/teachers/forward.py:30)
         student_imgs = (
             torch.nn.functional.interpolate(imgs, size=self.args.imgsz, mode="bilinear", antialias=True)
-            if self.args.imgsz != 256
+            if self.args.imgsz != self._teacher_imgsz
             else imgs
         )
 
