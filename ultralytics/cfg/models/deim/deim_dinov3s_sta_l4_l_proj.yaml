@@ -1,6 +1,7 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-# Ultralytics RT-DETR (DINOv3-s) with STA dual-path fusion and DEIMv2-large-like encoder+decoder settings
+# Ultralytics RT-DETR DEIM config based on `deim_dinov3s_sta_l4_l.yaml`.
+# This variant keeps the explicit learned input_proj convs from `rtdetr_dinov3s_l4_sta_v3.yaml`.
 # Model docs: https://docs.ultralytics.com/models/rtdetr
 # Task docs: https://docs.ultralytics.com/tasks/detect
 
@@ -19,7 +20,8 @@ backbone:
   - [0, 1, Index, [224, 3]] # 3 P5
 
 head:
-  # DEIMv2-large-like HybridEncoder head: input_proj + AIFI + FPN/PAN.
+  # DEIMv2-L HybridEncoder head with explicit input projections before AIFI/FPN/PAN.
+  # This preserves the original `rtdetr_dinov3s_l4_sta_v3.yaml` behavior for comparison.
   - [3, 1, Conv, [224, 1, 1, None, 1, 1, False]] # 4 input_proj.2
   - [-1, 1, AIFI, [896, 8]]
   - [-1, 1, Conv, [224, 1, 1, None, 1, 1, False]] # 6 Y5, lateral_convs.0
@@ -43,7 +45,7 @@ head:
   - [[-1, 6], 1, Add, []]
   - [-1, 1, RepNCSPELAN5, [224, 448, 112, 3]] # 21 F5, pan_blocks.1
 
-  # DeimDecoder (DEIMv2-large defaults explicitly set in YAML)
+  # DeimDecoder (DEIMv2-L defaults explicitly set in YAML)
   # Args: [nc, hd, nq, ndp, nh, ndl, d_ffn, dropout, act, eval_idx, nd, label_noise_ratio, box_noise_scale,
   #        learnt_init_query, enable_cuda_acceleration, one_to_many_groups, dab_sine_embedding,
   #        efficient_msdeformable_attn, query_select_method, reg_max, reg_scale, layer_scale, mlp_act,
