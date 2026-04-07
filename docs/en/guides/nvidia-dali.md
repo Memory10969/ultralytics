@@ -231,7 +231,7 @@ This version exactly replicates the default Ultralytics preprocessing with cente
 
 ## Using DALI with Ultralytics Predict
 
-You can pass a preprocessed [PyTorch](https://www.ultralytics.com/glossary/pytorch) tensor directly to `model.predict()`. When a `torch.Tensor` is passed, Ultralytics **skips image preprocessing** (letterbox, BGR→RGB, HWC→CHW, and /255 normalization) and only performs device transfer and [dtype](https://www.ultralytics.com/glossary/precision) casting before sending it to the model.
+You can pass a preprocessed [PyTorch](https://www.ultralytics.com/glossary/pytorch) tensor directly to `model.predict()`. When a `torch.Tensor` is passed, Ultralytics **skips image preprocessing** (letterbox, BGR→RGB, HWC→CHW, and /255 normalization) and only performs device transfer and dtype casting before sending it to the model.
 
 Since Ultralytics doesn't have access to the original image dimensions in this case, detection box coordinates are returned in the 640×640 letterboxed space. To map them back to original image coordinates, use [`scale_boxes`](../reference/utils/ops.md) which handles the exact rounding logic used by `LetterBox`:
 
@@ -534,6 +534,10 @@ ensemble_scheduling {
 
 ### Step 4: Send Inference Requests
 
+!!! info "Why `tritonclient` instead of `YOLO(\"http://...\")`?"
+
+    Ultralytics has [built-in Triton support](triton-inference-server.md#running-inference) that handles pre/postprocessing automatically. However, it won't work with the DALI ensemble because `YOLO()` sends a preprocessed float32 tensor while the ensemble expects raw JPEG bytes. Use `tritonclient` directly for DALI ensembles, and the [built-in integration](triton-inference-server.md) for standard deployments without DALI.
+
 !!! example "Send images to Triton ensemble"
 
     ```python
@@ -589,7 +593,7 @@ DALI preprocessing works with all YOLO tasks that use the standard `LetterBox` p
 
 ### How does DALI preprocessing compare to CPU preprocessing speed?
 
-The benefit depends on your pipeline. When GPU inference is fast ([TensorRT](../integrations/tensorrt.md) < 1ms), CPU preprocessing at 2-10ms becomes the dominant cost. DALI eliminates this bottleneck by running preprocessing on the GPU. The biggest gains are seen with high-resolution inputs (1080p, 4K), large [batch sizes](https://www.ultralytics.com/glossary/batch-size), and systems with limited CPU cores per GPU.
+The benefit depends on your pipeline. When GPU inference is already fast with [TensorRT](../integrations/tensorrt.md), CPU preprocessing at 2-10ms can become the dominant cost. DALI eliminates this bottleneck by running preprocessing on the GPU. The biggest gains are seen with high-resolution inputs (1080p, 4K), large [batch sizes](https://www.ultralytics.com/glossary/batch-size), and systems with limited CPU cores per GPU.
 
 ### Can I use DALI with PyTorch models (not just TensorRT)?
 
@@ -601,7 +605,7 @@ Yes. Use `DALIGenericIterator` to get preprocessed `torch.Tensor` outputs, then 
 
 ### Does DALI produce pixel-identical results to CPU preprocessing?
 
-Nearly identical. Set `antialias=False` in `fn.resize` to match OpenCV's `cv2.INTER_LINEAR`. Minor [floating-point](https://www.ultralytics.com/glossary/precision) differences (< 0.001) may occur due to GPU vs CPU arithmetic, but these have no measurable impact on detection [accuracy](https://www.ultralytics.com/glossary/accuracy).
+Nearly identical. Set `antialias=False` in `fn.resize` to match OpenCV's `cv2.INTER_LINEAR`. Minor floating-point differences (< 0.001) may occur due to GPU vs CPU arithmetic, but these have no measurable impact on detection [accuracy](https://www.ultralytics.com/glossary/accuracy).
 
 ### What about CV-CUDA as an alternative to DALI?
 
