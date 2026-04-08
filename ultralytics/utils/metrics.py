@@ -1233,6 +1233,16 @@ class SegmentMetrics(DetMetrics):
         self.seg = Metric()
         self.stats["tp_m"] = []  # add additional stats for masks
 
+    def update_stats(self, stat: dict[str, Any]) -> None:
+        """Update statistics by appending new values to existing stat collections.
+
+        Args:
+            stat (dict[str, Any]): Dictionary containing new statistical values to append. Keys should match existing
+                keys in self.stats.
+        """
+        super().update_stats(stat)  # update box stats
+        self.seg.pr_per_image(stat["tp_m"], stat["target_cls"], stat["pred_cls"], stat["im_file"])  # update mask stats
+
     def process(self, save_dir: Path = Path("."), plot: bool = False, on_plot=None) -> dict[str, np.ndarray]:
         """Process the detection and segmentation metrics over the given set of predictions.
 
@@ -1368,6 +1378,16 @@ class PoseMetrics(DetMetrics):
         super().__init__(names)
         self.pose = Metric()
         self.stats["tp_p"] = []  # add additional stats for pose
+
+    def update_stats(self, stat: dict[str, Any]) -> None:
+        """Update statistics by appending new values to existing stat collections.
+
+        Args:
+            stat (dict[str, Any]): Dictionary containing new statistical values to append. Keys should match existing
+                keys in self.stats.
+        """
+        super().update_stats(stat)  # update box stats
+        self.pose.pr_per_image(stat["tp"], stat["target_cls"], stat["pred_cls"], stat["im_file"])
 
     def process(self, save_dir: Path = Path("."), plot: bool = False, on_plot=None) -> dict[str, np.ndarray]:
         """Process the detection and pose metrics over the given set of predictions.
