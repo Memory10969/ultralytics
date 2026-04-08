@@ -319,29 +319,24 @@ class DepthDataset(YOLODataset):
         >>> dataset = DepthDataset(img_path="/data/nyu/images/train", data={"nc": 1})
     """
 
-    def cache_labels(self, path=Path("./labels.cache")):
-        """Cache labels and add depth file paths."""
-        x = super().cache_labels(path)
-        for label in x["labels"]:
-            im_file = label["im_file"]
-            # Map images/split/name.jpg → depth/split/name.npy
-            depth_file = im_file.replace("/images/", "/depth/")
-            depth_file = str(Path(depth_file).with_suffix(".npy"))
-            label["depth_file"] = depth_file
-        return x
-
     def get_image_and_label(self, index):
         """Load image, label, and depth map for the given index."""
         label = super().get_image_and_label(index)
-        # Load depth map
-        depth_file = self.labels[index].get("depth_file", "")
-        if depth_file and Path(depth_file).exists():
+        # Derive depth path from image path: images/split/name.jpg → depth/split/name.npy
+        im_file = self.labels[index]["im_file"]
+        depth_file = im_file.replace("/images/", "/depth/")
+        depth_file = str(Path(depth_file).with_suffix(".npy"))
+        if Path(depth_file).exists():
             depth = np.load(depth_file).astype(np.float32)
-            # Resize depth to match the resized image
+            # Resize to match the loaded image size (before LetterBox)
             h, w = label["resized_shape"]
             if depth.shape[:2] != (h, w):
                 depth = cv2.resize(depth, (w, h), interpolation=cv2.INTER_LINEAR)
             label["depth"] = depth
+        else:
+            # Fallback: zero depth map
+            h, w = label["resized_shape"]
+            label["depth"] = np.zeros((h, w), dtype=np.float32)
         return label
 
     def build_transforms(self, hyp=None):
@@ -379,23 +374,28 @@ class DepthDataset(YOLODataset):
 
 
 class DepthFormat:
-    """Format transform for depth estimation: converts images and depth maps to tensors."""
+    """Format transform for depth estimation: converts images and depth maps to tensors.
+
+    Applied after LetterBox, so img is already at target shape.
+    Resizes depth to match img, then converts both to tensors.
+    """
 
     def __call__(self, labels):
-        img = labels.get("img", labels.get("image"))
+        img = labels.get("img")
         if img is not None:
+            # Resize depth to match img shape (LetterBox may have changed img size)
+            depth = labels.get("depth")
+            if depth is not None:
+                img_h, img_w = img.shape[:2]
+                if depth.shape[:2] != (img_h, img_w):
+                    depth = cv2.resize(depth, (img_w, img_h), interpolation=cv2.INTER_LINEAR)
+                labels["depth"] = torch.from_numpy(np.ascontiguousarray(depth[None])).float()  # (1, H, W)
+
+            # Convert image: HWC BGR uint8 → CHW RGB float [0,1]
             if img.ndim == 2:
                 img = img[:, :, None]
-            img = img.transpose(2, 0, 1)  # HWC → CHW
-            img = np.ascontiguousarray(img[::-1])  # BGR → RGB
+            img = np.ascontiguousarray(img.transpose(2, 0, 1)[::-1])  # HWC→CHW, BGR→RGB
             labels["img"] = torch.from_numpy(img).float() / 255.0
-
-        depth = labels.get("depth")
-        if depth is not None:
-            # Apply same letterbox transform to depth
-            if depth.ndim == 2:
-                depth = depth[None]  # (1, H, W)
-            labels["depth"] = torch.from_numpy(np.ascontiguousarray(depth)).float()
 
         return labels
 
