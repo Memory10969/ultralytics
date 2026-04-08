@@ -351,7 +351,7 @@ class DepthDataset(YOLODataset):
         perspective transforms since they would create discontinuities in depth maps.
         """
         transforms = Compose([
-            LetterBox(new_shape=(self.imgsz, self.imgsz), auto=False, scaleFill=True),
+            LetterBox(new_shape=(self.imgsz, self.imgsz), auto=False, scale_fill=True),
             DepthFormat(),
         ])
         return transforms
