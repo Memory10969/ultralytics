@@ -97,6 +97,7 @@ class DetectionValidator(BaseValidator):
         self.jdict = []
         self.metrics.names = model.names
         self.confusion_matrix = ConfusionMatrix(names=model.names, save_matches=self.args.plots and self.args.visualize)
+        self.image_metrics = []
 
     def get_desc(self) -> str:
         """Return a formatted string summarizing class metrics of YOLO model."""
@@ -176,12 +177,13 @@ class DetectionValidator(BaseValidator):
             self.seen += 1
             pbatch = self._prepare_batch(si, batch)
             predn = self._prepare_pred(pred)
+            tp = self._process_batch(predn, pbatch)
 
             cls = pbatch["cls"].cpu().numpy()
             no_pred = predn["cls"].shape[0] == 0
             self.metrics.update_stats(
                 {
-                    **self._process_batch(predn, pbatch),
+                    **tp,
                     "target_cls": cls,
                     "target_img": np.unique(cls),
                     "conf": np.zeros(0) if no_pred else predn["conf"].cpu().numpy(),
@@ -218,6 +220,7 @@ class DetectionValidator(BaseValidator):
         self.metrics.speed = self.speed
         self.metrics.confusion_matrix = self.confusion_matrix
         self.metrics.save_dir = self.save_dir
+        self.metrics.image_metrics = self.image_metrics
 
     def gather_stats(self) -> None:
         """Gather stats from all GPUs."""
@@ -285,7 +288,34 @@ class DetectionValidator(BaseValidator):
         if batch["cls"].shape[0] == 0 or preds["cls"].shape[0] == 0:
             return {"tp": np.zeros((preds["cls"].shape[0], self.niou), dtype=bool)}
         iou = box_iou(batch["bboxes"], preds["bboxes"])
-        return {"tp": self.match_predictions(preds["cls"], batch["cls"], iou).cpu().numpy()}
+        tp = self.match_predictions(preds["cls"], batch["cls"], iou).cpu().numpy()
+        self.image_metrics.append(self.pr_per_image(tp, batch, preds, conf_thres=0.25))
+        return {"tp": tp}
+
+    def pr_per_image(self, tp: np.ndarray, batch: dict, pred: dict, conf_thres: float = 0.25) -> None:
+        """
+        Calculate per-image precision and recall at the given confidence threshold.
+
+        Args:
+            tp (np.ndarray): True positive array of shape (num_preds, num_iou_thresholds).
+            batch (dict): Batch data containing ground truth 'cls' and 'im_file'.
+            pred (dict): Prediction data containing 'conf' (confidence scores) and 'cls' (predicted classes).
+            conf_thres (float): Confidence threshold for filtering predictions.
+
+        Returns:
+            (dict): Dictionary with keys 'im_file', 'precision', and 'recall' for the image.
+        """
+        conf = pred["conf"].cpu().numpy()
+        i = np.argsort(-conf)
+        tp, conf = tp[i], conf[i]
+        tp = tp[conf > conf_thres]
+        pred_cls = pred["cls"][conf > conf_thres]
+
+        # pick the tp with iou > 0.5
+        tp = tp[:, 0].sum()
+        precision = tp / pred_cls.shape[0] if pred_cls.shape[0] else 0
+        recall = tp / batch["cls"].shape[0] if batch["cls"].shape[0] else 0
+        return {"im_file": batch["im_file"], "precision": precision, "recall": recall}
 
     def build_dataset(self, img_path: str, mode: str = "val", batch: int | None = None) -> torch.utils.data.Dataset:
         """Build YOLO Dataset.
