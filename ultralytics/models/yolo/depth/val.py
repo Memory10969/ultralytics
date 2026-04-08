@@ -76,8 +76,8 @@ class DepthValidator(DetectionValidator):
             if mask.sum() < 100:
                 continue
 
-            p_valid = np.clip(p[mask], 0.001, None)
-            g_valid = g[mask]
+            p_valid = np.clip(p[mask], 0.001, 100.0)
+            g_valid = np.clip(g[mask], 0.001, 100.0)
 
             # Threshold accuracy
             thresh = np.maximum(p_valid / g_valid, g_valid / p_valid)
