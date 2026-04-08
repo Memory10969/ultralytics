@@ -367,14 +367,14 @@ class DepthDataset(YOLODataset):
             value = values[i]
             if k in {"img", "depth"}:
                 value = torch.stack(value, 0)
-            elif k in {"masks", "keypoints", "bboxes", "cls", "segments", "obb"}:
+            elif k in {"masks", "keypoints", "bboxes", "cls", "segments", "obb", "batch_idx"}:
+                # Convert numpy to tensor if needed
+                value = [torch.from_numpy(v) if isinstance(v, np.ndarray) else v for v in value]
                 value = torch.cat(value, 0)
             new_batch[k] = value
-        if "batch_idx" in new_batch:
-            new_batch["batch_idx"] = list(new_batch["batch_idx"])
-            for i in range(len(new_batch["batch_idx"])):
-                new_batch["batch_idx"][i] += i
-            new_batch["batch_idx"] = torch.cat(new_batch["batch_idx"], 0)
+        if "batch_idx" in new_batch and isinstance(new_batch["batch_idx"], torch.Tensor):
+            # Re-index batch_idx is not needed for depth (no detection targets)
+            pass
         return new_batch
 
 
