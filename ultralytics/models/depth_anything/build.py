@@ -140,7 +140,10 @@ def _remap_state_dict(state_dict: dict) -> dict:
             mapped[new_k] = v
             continue
 
-        # Everything else passes through unchanged (encoder keys, projects, resize_layers)
+        # Remap encoder: pretrained.* → encoder.*
+        if new_k.startswith("pretrained."):
+            new_k = "encoder." + new_k[len("pretrained."):]
+
         mapped[new_k] = v
 
     return mapped
