@@ -1387,7 +1387,7 @@ class PoseMetrics(DetMetrics):
                 keys in self.stats.
         """
         super().update_stats(stat)  # update box stats
-        self.pose.pr_per_image(stat["tp"], stat["target_cls"], stat["pred_cls"], stat["im_name"])
+        self.pose.pr_per_image(stat["tp_p"], stat["target_cls"], stat["pred_cls"], stat["im_name"])
 
     def process(self, save_dir: Path = Path("."), plot: bool = False, on_plot=None) -> dict[str, np.ndarray]:
         """Process the detection and pose metrics over the given set of predictions.
