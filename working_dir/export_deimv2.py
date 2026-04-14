@@ -81,7 +81,7 @@ def build_engine_fp16(onnx_path, engine_path, workspace=None, half=True, shape=(
         # Keep the numerically sensitive ops in fp32, but leave attention
         # MatMul in fp16 for this minimal mixed-precision trial.
         norm_re = re.compile(r"/(?:norm\d*|gateway/norm)(?:/|$)")
-        score_mm_re = re.compile(r"/(?:attn|self_attn|cross_attn)/MatMul$")
+        attn_re = re.compile(r"/attn/|/self_attn/|/cross_attn/")
         pow_re = re.compile(r"/Pow(?:_|$)", re.IGNORECASE)
         sqrt_re = re.compile(r"/Sqrt(?:_|$)", re.IGNORECASE)
         n_pinned = 0
@@ -95,7 +95,7 @@ def build_engine_fp16(onnx_path, engine_path, workspace=None, half=True, shape=(
                 pin = True
             # Uncomment this narrower score-matmul override if T4 still needs
             # extra stabilization without pinning every attention MatMul.
-            # elif layer.type == trt.LayerType.MATRIX_MULTIPLY and score_mm_re.search(name):
+            # elif layer.type == trt.LayerType.MATRIX_MULTIPLY and attn_re.search(name):
             #     pin = True
             elif norm_re.search(name) and layer.type == trt.LayerType.REDUCE:
                 pin = True
