@@ -27,8 +27,8 @@ def torch2ethos(
         torch_model (torch.nn.Module): PyTorch model to export.
         file (Path | str): Source model file path used to derive output names.
         sample_input (torch.Tensor): Example input tensor for tracing/export.
-        dataset (Iterable[Any] | None, optional): Representative calibration dataset for PTQ. Each item may be a
-            tensor batch or a batch dictionary containing an ``img`` tensor.
+        dataset (Iterable[Any] | None, optional): Representative calibration dataset for PTQ. Each item may be a tensor
+            batch or a batch dictionary containing an ``img`` tensor.
         target (str, optional): Ethos target to compile for.
         metadata (dict | None, optional): Optional metadata to save as YAML.
         prefix (str, optional): Prefix for log messages.
