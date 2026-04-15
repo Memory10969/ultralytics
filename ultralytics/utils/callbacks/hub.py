@@ -83,7 +83,6 @@ def on_val_start(validator):
         events(validator.args, validator.device)
 
 
-
 def on_predict_batch_end(predictor):
     """Queue/update a predict event with the latest batch metadata.
 
