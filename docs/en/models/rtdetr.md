@@ -90,7 +90,7 @@ This table presents the model types, the specific pretrained weights, the tasks 
 
 !!! note "Architecture-only variants"
 
-    [`rtdetr-resnet50.yaml`](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/models/rt-detr/rtdetr-resnet50.yaml) and [`rtdetr-resnet101.yaml`](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/models/rt-detr/rtdetr-resnet101.yaml) are shipped as YAML architectures only — Ultralytics releases pretrained weights only for `rtdetr-l` and `rtdetr-x`. Load the ResNet backbones via the YAML (e.g. `RTDETR("rtdetr-resnet50.yaml")`) and train from scratch.
+    [`rtdetr-resnet50.yaml`](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/models/rt-detr/rtdetr-resnet50.yaml) and [`rtdetr-resnet101.yaml`](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/models/rt-detr/rtdetr-resnet101.yaml) are shipped as YAML architectures only. Ultralytics releases pretrained weights only for `rtdetr-l` and `rtdetr-x`. Load the ResNet backbones via the YAML (e.g. `RTDETR("rtdetr-resnet50.yaml")`) and train from scratch.
 
 ## Ideal Use Cases
 
