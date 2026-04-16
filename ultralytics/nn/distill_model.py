@@ -155,10 +155,10 @@ class DistillationModel(nn.Module):
             batch (dict): Batch to compute loss on.
             preds (torch.Tensor | list[torch.Tensor], optional): Predictions.
         """
+        loss_distill = torch.zeros(1, device=batch["img"].device)
         if not self.training:  # for loss calculation during validation while training
             preds = self.student_model(batch["img"])
             regular_loss, regular_loss_detach = self.student_model.loss(batch, preds)
-            loss_distill = torch.zeros(1, device=batch["img"].device)
             distill_loss_detach = torch.zeros(1, device=batch["img"].device)
             return torch.cat([regular_loss, loss_distill]), torch.cat([regular_loss_detach, distill_loss_detach])
 
@@ -171,8 +171,6 @@ class DistillationModel(nn.Module):
         preds = self.student_model(batch["img"])  # hooks capture student features
 
         regular_loss, regular_loss_detach = self.student_model.loss(batch, preds)
-
-        distill_loss = torch.zeros(1, device=batch["img"].device)
         teacher_head_feat = self._teacher_feats[self.feats_idx[-1]]
         teacher_scores = (
             self.decouple_outputs(teacher_head_feat, branch="one2many")["scores"]
@@ -187,12 +185,12 @@ class DistillationModel(nn.Module):
                 continue
             if student_feat.ndim == 4:
                 student_feat = self.projector[i](student_feat)
-            distill_loss += (
+            loss_distill += (
                 self.loss_sl2(student_feat, teacher_feat, feat_idx=i, teacher_scores=teacher_scores) * self.dis
             )
 
-        distill_loss_detach = distill_loss.detach()
-        loss_distill = distill_loss * batch["img"].shape[0]
+        distill_loss_detach = loss_distill.detach()
+        loss_distill *= batch["img"].shape[0]
         return torch.cat([regular_loss, loss_distill]), torch.cat([regular_loss_detach, distill_loss_detach])
 
     def loss_sl2(
