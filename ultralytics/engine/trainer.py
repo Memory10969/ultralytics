@@ -339,12 +339,7 @@ class BaseTrainer:
             torch.amp.GradScaler("cuda", enabled=self.amp) if TORCH_2_4 else torch.cuda.amp.GradScaler(enabled=self.amp)
         )
         if self.args.distill_model is not None and not isinstance(unwrap_model(self.model), DistillationModel):
-            teacher = self.args.distill_model
-            if self.resume and ckpt is not None:
-                ema_model = ckpt.get("ema")
-                if ema_model is not None and hasattr(ema_model, "teacher_model"):
-                    teacher = ema_model.teacher_model.float()
-            self.model = DistillationModel(student_model=self.model, teacher_model=teacher).to(self.device)
+            self.model = DistillationModel(student_model=self.model, teacher_model=self.args.distill_model)
         if self.world_size > 1:
             self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[RANK], find_unused_parameters=True)
 
