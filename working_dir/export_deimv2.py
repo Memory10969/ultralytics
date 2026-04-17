@@ -144,25 +144,56 @@ def build_engine_fp16(onnx_path, engine_path, workspace=None, half=True, shape=(
         attn_re = re.compile(r"/attn/|/self_attn/|/cross_attn/")
         pow_re = re.compile(r"/Pow(?:_|$)", re.IGNORECASE)
         sqrt_re = re.compile(r"/Sqrt(?:_|$)", re.IGNORECASE)
+        head_re = re.compile(r"/dec_(score|bbox)_head")
+        lqe_re = re.compile(r"/lqe_layers")
+        integral_re = re.compile(r"/integral(?:_\d+)?/")
+        # Layer types that actually do fp16 math. Shape/constant/gather/
+        # unsqueeze/concat ops carry metadata; pinning them is a no-op at
+        # best and can force spurious reformat layers at worst.
+        compute_types = {
+            trt.LayerType.MATRIX_MULTIPLY,
+            trt.LayerType.CONVOLUTION,
+            trt.LayerType.ELEMENTWISE,
+            trt.LayerType.ACTIVATION,
+            trt.LayerType.SOFTMAX,
+            trt.LayerType.REDUCE,
+            trt.LayerType.UNARY,
+            trt.LayerType.NORMALIZATION,
+            trt.LayerType.SCALE,
+        }
         n_pinned = 0
         for i in range(network.num_layers):
             layer = network.get_layer(i)
             name = layer.name or ""
             pin = False
-            # if layer.type == trt.LayerType.SOFTMAX:
-            #     pin = True
-            # elif layer.type == trt.LayerType.NORMALIZATION:
-            #     pin = True
+            if layer.type == trt.LayerType.SOFTMAX:
+                pin = True
+            if layer.type == trt.LayerType.NORMALIZATION:
+                pin = True
             # Uncomment this narrower score-matmul override if T4 still needs
             # extra stabilization without pinning every attention MatMul.
             # elif layer.type == trt.LayerType.MATRIX_MULTIPLY and attn_re.search(name):
             #     pin = True
-            if norm_re.search(name) and layer.type == trt.LayerType.REDUCE:
+            elif norm_re.search(name) and layer.type == trt.LayerType.REDUCE:
                 pin = True
             elif norm_re.search(name) and layer.type == trt.LayerType.UNARY and sqrt_re.search(name):
                 pin = True
             elif norm_re.search(name) and layer.type == trt.LayerType.ELEMENTWISE and pow_re.search(name):
                 pin = True
+            # Priority A: final decoder heads produce classification logits and
+            # bbox distribution — fp16 drift here directly shifts (conf, cls).
+            # Comparison of fp32 vs pure-fp16 engines showed confidences drop
+            # by up to 0.5 on some detections and class-ids flip — indicates
+            # the head path is the dominant precision leak.
+            # elif head_re.search(name) and layer.type in compute_types:
+            #     pin = True
+            # # Priority B: LQE weights the score by localisation quality.
+            # elif lqe_re.search(name) and layer.type in compute_types:
+            #     pin = True
+            # # Priority C: distribution integral (softmax + project) turns reg_max
+            # # bins into continuous bbox distances.
+            # elif integral_re.search(name) and layer.type in compute_types:
+            #     pin = True
             if pin:
                 layer.precision = trt.float32
                 for o in range(layer.num_outputs):
