@@ -14,6 +14,7 @@ from ultralytics.engine.exporter import Exporter
 from ultralytics.models.yolo import classify, detect, obb, pose, segment
 from ultralytics.nn.tasks import load_checkpoint
 from ultralytics.utils import ASSETS, DEFAULT_CFG, WEIGHTS_DIR
+from ultralytics.utils.metrics import DetMetrics, PoseMetrics, SegmentMetrics
 
 
 def test_func(*args, **kwargs):
@@ -160,7 +161,6 @@ def test_nan_recovery():
     trainer.add_callback("on_train_batch_end", inject_nan)
     trainer.train()
     assert nan_injected[0], "NaN injection failed"
-
 
 def test_train_reuses_loaded_checkpoint_model(monkeypatch):
     """Test training reuses an already-loaded checkpoint model instead of re-parsing the model source."""
