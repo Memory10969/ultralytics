@@ -21,13 +21,13 @@ The output of an oriented object detector is a set of rotated bounding boxes tha
 
 <p align="center">
   <br>
-  <iframe loading="lazy" width="720" height="405" src="https://www.youtube.com/embed/Z7Z9pHF8wJc"
+  <iframe loading="lazy" width="720" height="405" src="https://www.youtube.com/embed/128JhhR2DlM"
     title="YouTube video player" frameborder="0"
     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
     allowfullscreen>
   </iframe>
   <br>
-  <strong>Watch:</strong> Object Detection using Ultralytics YOLO Oriented Bounding Boxes (YOLO-OBB)
+  <strong>Watch:</strong> How to Detect & Track Objects with Ultralytics YOLO26 Oriented Bounding Boxes (OBB) | Ship Tracking 🚢
 </p>
 
 ## Visual Samples
@@ -66,7 +66,7 @@ Train YOLO26n-obb on the DOTA8 dataset for 100 [epochs](https://www.ultralytics.
         # Load a model
         model = YOLO("yolo26n-obb.yaml")  # build a new model from YAML
         model = YOLO("yolo26n-obb.pt")  # load a pretrained model (recommended for training)
-        model = YOLO("yolo26n-obb.yaml").load("yolo26n.pt")  # build from YAML and transfer weights
+        model = YOLO("yolo26n-obb.yaml").load("yolo26n-obb.pt")  # build from YAML and transfer weights
 
         # Train the model
         results = model.train(data="dota8.yaml", epochs=100, imgsz=640)

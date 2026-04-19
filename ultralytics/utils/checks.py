@@ -478,7 +478,10 @@ def check_requirements(requirements=ROOT.parent / "requirements.txt", exclude=()
                 text=True,
             )
         return subprocess.check_output(
-            f"pip install --no-cache-dir {packages} {commands}", shell=True, stderr=subprocess.STDOUT, text=True
+            f'"{sys.executable}" -m pip install --no-cache-dir {packages} {commands}',
+            shell=True,
+            stderr=subprocess.STDOUT,
+            text=True,
         )
 
     s = " ".join(f'"{x}"' for x in pkgs)  # console string
@@ -538,6 +541,7 @@ def check_torchvision():
     to the compatibility table based on: https://github.com/pytorch/vision#installation.
     """
     compatibility_table = {
+        "2.10": ["0.25"],
         "2.9": ["0.24"],
         "2.8": ["0.23"],
         "2.7": ["0.22"],
