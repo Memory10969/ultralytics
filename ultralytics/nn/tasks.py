@@ -6,11 +6,54 @@ import re
 import types
 from copy import deepcopy
 from pathlib import Path
+from tkinter.tix import Select
 
 import torch
 import torch.nn as nn
 
 from ultralytics.nn.autobackend import check_class_names
+#
+# from ultralytics.nn.modules.backbone.lsknet import LSKNet
+
+from ultralytics.nn.modules import SEAttention, A2C2f_MobileMQA
+from ultralytics.nn.modules.CPFNet import EVCBlock
+from ultralytics.nn.modules.hwd import HWD
+from ultralytics.nn.modules.lsknet import LSK,C3k2_LSK
+from ultralytics.nn.modules.fmb import FMB
+from ultralytics.nn.modules.simam import SimAM,C3k2_SimAM
+from ultralytics.nn.modules.coordatt import CoordAtt, C3k2_CA
+
+from ultralytics.nn.modules.WTConv import WTConv2d,C3k2_WT
+from ultralytics.nn.modules.shsa import SHSA
+from ultralytics.nn.modules.mobilemqa import MobileMQA
+from ultralytics.nn.modules.WeightedP2Fusion import WeightedP2Fusion
+from ultralytics.nn.modules.SCSA import A2C2f_SCSA,C2PSA_SCSA
+from ultralytics.nn.modules.CSPPConv import CSP_PConv
+from ultralytics.nn.modules.AdaptiveResidualFusion import AdaptiveResidualFusion
+from ultralytics.nn.modules.spapf import SPAPF
+from ultralytics.nn.modules.DyHead import DyHead
+from ultralytics.nn.modules.SPPF_LSKA import SPPF_LSKA
+from ultralytics.nn.modules.DynamicMultiBranch import DynamicPartialIdentity, DynamicWaveletAttentionIdentity,DynamicWaveletIdentity
+from ultralytics.nn.modules.DepthwiseSeparableConv import DepthwiseSeparableConvWithWTConv2d
+from ultralytics.nn.modules.conv import LightConv
+from ultralytics.nn.modules.DyUpsample import DySample
+from ultralytics.nn.modules.MoE import MoEBlock,AttMoE,ConvMoE
+from ultralytics.nn.modules.DySPPF import DynamicSPPF
+from ultralytics.nn.modules.RFAConv import RFAConv
+from ultralytics.nn.modules.DPConv import DPConv,DPConvBlock
+from ultralytics.nn.modules.TernaryDPConv import TernaryDPConv
+from ultralytics.nn.modules.SmartAreaAttention import SmartAreaAttention
+from ultralytics.nn.modules.SaveFirstImage import SaveFirstImage
+from ultralytics.nn.modules.BiDirectionalTGFI import BiDirectionalTGFI, BiDirectionalTGFIBlock
+from ultralytics.nn.modules.BackgroundSuppression import BackgroundSuppression
+from ultralytics.nn.modules.TernaryMoEBlock import TernaryMoEBlock
+from ultralytics.nn.modules.DeterministicGateConv import DeterministicGateConv
+from ultralytics.nn.modules.GatedC3k2 import GatedC3k2
+from ultralytics.nn.modules.WTGatedC3k2 import WTGatedC3k2
+from ultralytics.nn.modules.HIPA import HIPA
+from ultralytics.nn.modules.HIPAV2 import HIPAV2
+from ultralytics.nn.modules.WaveletStem import WaveletStem
+
 from ultralytics.nn.modules import (
     AIFI,
     C1,
@@ -72,6 +115,8 @@ from ultralytics.nn.modules import (
     YOLOESegment,
     YOLOESegment26,
     v10Detect,
+
+    VisionTransformer,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, WINDOWS, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -1337,9 +1382,9 @@ def temporary_modules(modules=None, attributes=None):
         attributes (dict, optional): A dictionary mapping old module attributes to new module attributes.
 
     Examples:
-        >>> with temporary_modules({"old.module": "new.module"}, {"old.module.attribute": "new.module.attribute"}):
-        >>> import old.module  # this will now import new.module
-        >>> from old.module import attribute  # this will now import new.module.attribute
+        # >>> with temporary_modules({"old.module": "new.module"}, {"old.module.attribute": "new.module.attribute"}):
+        # >>> import old.module  # this will now import new.module
+        # >>> from old.module import attribute  # this will now import new.module.attribute
 
     Notes:
         The changes are only in effect inside the context manager and are undone once the context manager exits.
@@ -1574,6 +1619,46 @@ def parse_model(d, ch, verbose=True):
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
     base_modules = frozenset(
         {
+
+            HWD,
+            C3k2_LSK,
+            SimAM,
+            C3k2_SimAM,
+            CoordAtt,
+            C3k2_CA,
+            WTConv2d,
+            C3k2_WT,
+            SHSA,
+            A2C2f_MobileMQA,
+            A2C2f_SCSA,
+            CSP_PConv,
+            C2PSA_SCSA,
+            SPAPF,
+            SPPF_LSKA,
+            DynamicPartialIdentity,
+            DepthwiseSeparableConvWithWTConv2d,
+            DynamicWaveletAttentionIdentity,
+            MoEBlock,
+            AttMoE,
+            DynamicWaveletIdentity,
+            DynamicSPPF,
+            RFAConv,
+            ConvMoE,
+            DPConv,
+            DPConvBlock,
+            TernaryDPConv,
+            SmartAreaAttention,
+            BiDirectionalTGFI,
+            BiDirectionalTGFIBlock,
+            BackgroundSuppression,
+            TernaryMoEBlock,
+            DeterministicGateConv,
+            GatedC3k2,
+            WTGatedC3k2,
+            HIPA,
+            HIPAV2,
+            WaveletStem,
+
             Classify,
             Conv,
             ConvTranspose,
@@ -1612,6 +1697,39 @@ def parse_model(d, ch, verbose=True):
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
         {
+            C3k2_LSK,
+            SimAM,
+            C3k2_SimAM,
+            CoordAtt,
+            C3k2_CA,
+            WTConv2d,
+            C3k2_WT,
+            SHSA,
+            A2C2f_MobileMQA,
+            A2C2f_SCSA,
+            CSP_PConv,
+            C2PSA_SCSA,
+            SPAPF,
+            SPPF_LSKA,
+            DynamicPartialIdentity,
+            DynamicWaveletAttentionIdentity,
+            MoEBlock,
+            AttMoE,
+            DynamicWaveletIdentity,
+            ConvMoE,
+            DPConv,
+            DPConvBlock,
+            TernaryDPConv,
+            SmartAreaAttention,
+            BiDirectionalTGFI,
+            BiDirectionalTGFIBlock,
+            TernaryMoEBlock,
+            DeterministicGateConv,
+            GatedC3k2,
+            WTGatedC3k2,
+            HIPA,
+            HIPAV2,
+
             BottleneckCSP,
             C1,
             C2,
@@ -1627,9 +1745,11 @@ def parse_model(d, ch, verbose=True):
             C2fCIB,
             C2PSA,
             A2C2f,
+
         }
     )
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
+        print(f"网络：{m} ,repeat:{n}")
         m = (
             getattr(torch.nn, m[3:])
             if "nn." in m
@@ -1653,6 +1773,7 @@ def parse_model(d, ch, verbose=True):
             args = [c1, c2, *args[1:]]
             if m in repeat_modules:
                 args.insert(2, n)  # number of repeats
+                print(f"model : {m},arg:{args}, insert_n:{n}")
                 n = 1
             if m is C3k2:  # for M/L/X sizes
                 legacy = False
@@ -1678,8 +1799,38 @@ def parse_model(d, ch, verbose=True):
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
+        elif m is AdaptiveResidualFusion:
+            # AdaptiveResidualFusion 的参数顺序: [target_channels, p2_channels, compress_channels(可选)]
+            # 对通道参数应用缩放
+            target_c = args[0]
+            p2_c = args[1]
+            # 缩放目标通道
+            target_c_scaled = make_divisible(min(target_c, max_channels) * width, 8)
+            # 缩放 P2 通道（注意：P2 可能也来自 backbone，其实际通道已在 ch 中，但此处是配置原始值）
+            p2_c_scaled = make_divisible(min(p2_c, max_channels) * width, 8)
+            # 更新 args
+            args[0] = target_c_scaled
+            args[1] = p2_c_scaled
+            # 如果有第三个参数 compress_channels，也需要缩放
+            if len(args) > 2:
+                comp_c = args[2]
+                comp_c_scaled = make_divisible(min(comp_c, max_channels) * width, 8)
+                args[2] = comp_c_scaled
+            # 输出通道等于目标通道
+            c2 = target_c_scaled
+        elif m is DyHead:
+            # 输入来自列表 f，输出通道数等于第一个输入层的通道数
+            c2 = ch[f[0]]
+            # 将 args 中的第一个参数（in_channels）替换为实际缩放后的通道数
+            if args:
+                # 假设 args[0] 是 in_channels，args[1] 是 num_blocks（不需要缩放）
+                args[0] = c2
+            # 如果 DyHead 需要更多参数，可按需保留
         elif m in frozenset(
             {
+                # DynamicDetect,
+                # AnchorDetect,
+
                 Detect,
                 WorldDetect,
                 YOLOEDetect,
@@ -1698,6 +1849,16 @@ def parse_model(d, ch, verbose=True):
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
             if m in {Detect, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26}:
                 m.legacy = legacy
+        elif m is WeightedP2Fusion:
+            # f 是一个列表，格式：[目标层索引, P5层索引]
+            target_idx, p5_idx = f[0], f[1]
+            # 获取实际通道数（已应用缩放）
+            target_c_actual = ch[target_idx]
+            p5_c_actual = ch[p5_idx]
+            # 输出通道即为目标特征的实际通道数
+            c2 = target_c_actual
+            # 覆盖 args，传入实际通道数
+            args = [target_c_actual, p5_c_actual]
         elif m is v10Detect:
             args.append([ch[x] for x in f])
         elif m is ImagePoolingAttn:
@@ -1716,7 +1877,7 @@ def parse_model(d, ch, verbose=True):
             args = [*args[1:]]
         else:
             c2 = ch[f]
-
+        print(f"Instantiating {m} with args: {args}")
         m_ = torch.nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
         t = str(m)[8:-2].replace("__main__.", "")  # module type
         m_.np = sum(x.numel() for x in m_.parameters())  # number params

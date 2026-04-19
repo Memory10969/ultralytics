@@ -17,6 +17,9 @@ from ultralytics.utils.torch_utils import autocast
 from .metrics import bbox_iou, probiou
 from .tal import bbox2dist, rbox2dist
 
+# 在文件开头导入新损失
+from .nwd_piou_loss import NWD_PIoULoss
+
 
 class VarifocalLoss(nn.Module):
     """Varifocal loss by Zhang et al.
@@ -105,6 +108,410 @@ class DFLoss(nn.Module):
             + F.cross_entropy(pred_dist, tr.view(-1), reduction="none").view(tl.shape) * wr
         ).mean(-1, keepdim=True)
 
+
+
+# class BboxLoss(nn.Module):
+#     """支持 NWD+PIoUv2 复合损失的边界框损失类"""
+#
+#     def __init__(self, reg_max: int = 16, use_nwd_piou: bool = True,
+#                  nwd_weight=0.5, piou_weight=0.5, nwd_constant=12.8,
+#                  piou_gamma=0.5, piou_lambda=0.5):
+#         """
+#         Args:
+#             use_nwd_piou: True 使用 NWD+PIoU 复合损失
+#             nwd_weight, piou_weight: 两种损失的权重
+#             nwd_constant: NWD 归一化常数（小目标建议 8-12）
+#         """
+#         super().__init__()
+#         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
+#         self.use_nwd_piou = use_nwd_piou
+#
+#         if use_nwd_piou:
+#             self.composite_loss = NWD_PIoULoss(
+#                 nwd_weight=nwd_weight,
+#                 piou_weight=piou_weight,
+#                 nwd_constant=nwd_constant,
+#                 piou_gamma=piou_gamma,
+#                 piou_lambda=piou_lambda
+#             )
+#
+#     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes,
+#                 target_scores, target_scores_sum, fg_mask, imgsz, stride):
+#         """计算边界框损失"""
+#         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)  # (num_fg, 1)
+#
+#         if self.use_nwd_piou:
+#             # 使用 NWD+PIoU 复合损失
+#             loss_per_sample, nwd_mean, piou_mean = self.composite_loss(
+#                 pred_bboxes[fg_mask], target_bboxes[fg_mask]
+#             )
+#             loss_iou = (loss_per_sample.unsqueeze(-1) * weight).sum() / target_scores_sum
+#
+#             # 可选：打印监控信息
+#             # print(f"NWD loss: {nwd_mean:.4f}, PIoU loss: {piou_mean:.4f}")
+#         else:
+#             # 原始 CIoU
+#             iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
+#             loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
+#
+#         # DFL 损失（保持不变）
+#         # ... 保持原有 DFL 代码 ...
+#         if self.dfl_loss:
+#             target_ltrb = bbox2dist(anchor_points, target_bboxes, self.dfl_loss.reg_max - 1)
+#             loss_dfl = self.dfl_loss(pred_dist[fg_mask].view(-1, self.dfl_loss.reg_max), target_ltrb[fg_mask]) * weight
+#             loss_dfl = loss_dfl.sum() / target_scores_sum
+#         else:
+#             target_ltrb = bbox2dist(anchor_points, target_bboxes)
+#             target_ltrb = target_ltrb * stride
+#             target_ltrb[..., 0::2] /= imgsz[1]
+#             target_ltrb[..., 1::2] /= imgsz[0]
+#             pred_dist = pred_dist * stride
+#             pred_dist[..., 0::2] /= imgsz[1]
+#             pred_dist[..., 1::2] /= imgsz[0]
+#             loss_dfl = (
+#                     F.l1_loss(pred_dist[fg_mask], target_ltrb[fg_mask], reduction="none").mean(-1,
+#                                                                                                keepdim=True) * weight
+#             )
+#             loss_dfl = loss_dfl.sum() / target_scores_sum
+#
+#         return loss_iou, loss_dfl
+#
+
+# # Focal-iou
+# class BboxLoss(nn.Module):
+#     """支持 Focal-CIoU 的边界框损失类"""
+#
+#     def __init__(self, reg_max: int = 16, use_focal_ciou: bool = True,
+#                  focal_d: float = 0.2, focal_u: float = 0.5):
+#         """
+#         Args:
+#             reg_max: DFL 损失的最大通道数
+#             use_focal_ciou: True 使用 Focal-CIoU，False 使用原始 CIoU
+#             focal_d: Focaler 区间下限
+#             focal_u: Focaler 区间上限
+#         """
+#         super().__init__()
+#         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
+#         self.use_focal_ciou = use_focal_ciou
+#         self.focal_d = focal_d
+#         self.focal_u = focal_u
+#
+#     def _focal_ciou_loss(self, pred_bboxes, target_bboxes, d=0.2, u=0.5, eps=1e-7):
+#         """
+#         计算 Focal-CIoU 损失 (每个样本独立)
+#         Args:
+#             pred_bboxes: (N, 4) 预测框，格式 [x1, y1, x2, y2]
+#             target_bboxes: (N, 4) 真实框，格式 [x1, y1, x2, y2]
+#             d, u: Focaler 区间参数
+#         Returns:
+#             loss: (N,) 每个样本的 Focal-CIoU 损失
+#         """
+#         # 转换为 [x, y, w, h] 格式以便计算
+#         pred_x = (pred_bboxes[:, 0] + pred_bboxes[:, 2]) / 2
+#         pred_y = (pred_bboxes[:, 1] + pred_bboxes[:, 3]) / 2
+#         pred_w = pred_bboxes[:, 2] - pred_bboxes[:, 0]
+#         pred_h = pred_bboxes[:, 3] - pred_bboxes[:, 1]
+#         target_x = (target_bboxes[:, 0] + target_bboxes[:, 2]) / 2
+#         target_y = (target_bboxes[:, 1] + target_bboxes[:, 3]) / 2
+#         target_w = target_bboxes[:, 2] - target_bboxes[:, 0]
+#         target_h = target_bboxes[:, 3] - target_bboxes[:, 1]
+#
+#         # 基础 IoU
+#         inter_x1 = torch.max(pred_bboxes[:, 0], target_bboxes[:, 0])
+#         inter_y1 = torch.max(pred_bboxes[:, 1], target_bboxes[:, 1])
+#         inter_x2 = torch.min(pred_bboxes[:, 2], target_bboxes[:, 2])
+#         inter_y2 = torch.min(pred_bboxes[:, 3], target_bboxes[:, 3])
+#         inter_area = torch.clamp(inter_x2 - inter_x1, min=0) * torch.clamp(inter_y2 - inter_y1, min=0)
+#         pred_area = pred_w * pred_h
+#         target_area = target_w * target_h
+#         union_area = pred_area + target_area - inter_area + eps
+#         iou = inter_area / union_area
+#
+#         # CIoU 惩罚项
+#         # 中心点距离
+#         center_dist = (pred_x - target_x) ** 2 + (pred_y - target_y) ** 2
+#         # 最小外接框对角线长度
+#         enclose_x1 = torch.min(pred_bboxes[:, 0], target_bboxes[:, 0])
+#         enclose_y1 = torch.min(pred_bboxes[:, 1], target_bboxes[:, 1])
+#         enclose_x2 = torch.max(pred_bboxes[:, 2], target_bboxes[:, 2])
+#         enclose_y2 = torch.max(pred_bboxes[:, 3], target_bboxes[:, 3])
+#         enclose_diag = ((enclose_x2 - enclose_x1) ** 2 + (enclose_y2 - enclose_y1) ** 2) + eps
+#
+#         # 宽高比项 v
+#         v = (4 / torch.pi ** 2) * (torch.atan(target_w / (target_h + eps)) - torch.atan(pred_w / (pred_h + eps))) ** 2
+#         with torch.no_grad():
+#             alpha = v / (1 - iou + v + eps)
+#
+#         ciou = iou - center_dist / enclose_diag - alpha * v
+#         loss_ciou = 1 - ciou  # 原始 CIoU 损失
+#
+#         # Focaler 重构 IoU
+#         iou_focal = torch.zeros_like(iou)
+#         mask_low = iou < d
+#         mask_mid = (iou >= d) & (iou <= u)
+#         mask_high = iou > u
+#
+#         if mask_mid.any():
+#             iou_focal[mask_mid] = (iou[mask_mid] - d) / (u - d)
+#         iou_focal[mask_high] = 1.0
+#
+#         # Focal-CIoU 损失
+#         loss = loss_ciou + iou - iou_focal
+#         return loss  # (N,)
+#
+#     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes,
+#                 target_scores, target_scores_sum, fg_mask, imgsz, stride):
+#         """计算边界框损失"""
+#         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)  # (num_fg, 1)
+#
+#         if self.use_focal_ciou:
+#             # Focal-CIoU 损失
+#             iou_loss_per_sample = self._focal_ciou_loss(
+#                 pred_bboxes[fg_mask], target_bboxes[fg_mask],
+#                 d=self.focal_d, u=self.focal_u
+#             ).unsqueeze(-1)
+#             loss_iou = (iou_loss_per_sample * weight).sum() / target_scores_sum
+#         else:
+#             # 原始 CIoU
+#             iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
+#             loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
+#
+#         # DFL 损失（保持不变）
+#         if self.dfl_loss:
+#             target_ltrb = bbox2dist(anchor_points, target_bboxes, self.dfl_loss.reg_max - 1)
+#             loss_dfl = self.dfl_loss(pred_dist[fg_mask].view(-1, self.dfl_loss.reg_max), target_ltrb[fg_mask]) * weight
+#             loss_dfl = loss_dfl.sum() / target_scores_sum
+#         else:
+#             target_ltrb = bbox2dist(anchor_points, target_bboxes)
+#             target_ltrb = target_ltrb * stride
+#             target_ltrb[..., 0::2] /= imgsz[1]
+#             target_ltrb[..., 1::2] /= imgsz[0]
+#             pred_dist = pred_dist * stride
+#             pred_dist[..., 0::2] /= imgsz[1]
+#             pred_dist[..., 1::2] /= imgsz[0]
+#             loss_dfl = (
+#                 F.l1_loss(pred_dist[fg_mask], target_ltrb[fg_mask], reduction="none").mean(-1, keepdim=True) * weight
+#             )
+#             loss_dfl = loss_dfl.sum() / target_scores_sum
+#
+#         return loss_iou, loss_dfl
+
+# # EIOU
+# class BboxLoss(nn.Module):
+#     """支持 EIoU 的边界框损失类"""
+#
+#     def __init__(self, reg_max: int = 16, use_eiou: bool = True):
+#         """
+#         Args:
+#             reg_max: DFL 损失的最大通道数
+#             use_eiou: True 使用 EIoU，False 使用 CIoU
+#         """
+#         super().__init__()
+#         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
+#         self.use_eiou = use_eiou
+#
+#     def _eiou_loss(self, pred_bboxes, target_bboxes, eps=1e-7):
+#         """
+#         计算 EIoU 损失 (每个样本独立)
+#         Args:
+#             pred_bboxes: (N, 4) 预测框，格式 [x1, y1, x2, y2]
+#             target_bboxes: (N, 4) 真实框，格式 [x1, y1, x2, y2]
+#         Returns:
+#             loss: (N,) 每个样本的 EIoU 损失
+#         """
+#         # 转换为 [x, y, w, h] 格式，方便计算
+#         pred_x = (pred_bboxes[:, 0] + pred_bboxes[:, 2]) / 2
+#         pred_y = (pred_bboxes[:, 1] + pred_bboxes[:, 3]) / 2
+#         pred_w = pred_bboxes[:, 2] - pred_bboxes[:, 0]
+#         pred_h = pred_bboxes[:, 3] - pred_bboxes[:, 1]
+#         target_x = (target_bboxes[:, 0] + target_bboxes[:, 2]) / 2
+#         target_y = (target_bboxes[:, 1] + target_bboxes[:, 3]) / 2
+#         target_w = target_bboxes[:, 2] - target_bboxes[:, 0]
+#         target_h = target_bboxes[:, 3] - target_bboxes[:, 1]
+#
+#         # 1. 基础 IoU
+#         inter_x1 = torch.max(pred_bboxes[:, 0], target_bboxes[:, 0])
+#         inter_y1 = torch.max(pred_bboxes[:, 1], target_bboxes[:, 1])
+#         inter_x2 = torch.min(pred_bboxes[:, 2], target_bboxes[:, 2])
+#         inter_y2 = torch.min(pred_bboxes[:, 3], target_bboxes[:, 3])
+#         inter_area = torch.clamp(inter_x2 - inter_x1, min=0) * torch.clamp(inter_y2 - inter_y1, min=0)
+#         pred_area = pred_w * pred_h
+#         target_area = target_w * target_h
+#         union_area = pred_area + target_area - inter_area + eps
+#         iou = inter_area / union_area
+#
+#         # 2. 最小外接矩形
+#         enclose_x1 = torch.min(pred_bboxes[:, 0], target_bboxes[:, 0])
+#         enclose_y1 = torch.min(pred_bboxes[:, 1], target_bboxes[:, 1])
+#         enclose_x2 = torch.max(pred_bboxes[:, 2], target_bboxes[:, 2])
+#         enclose_y2 = torch.max(pred_bboxes[:, 3], target_bboxes[:, 3])
+#         enclose_w = enclose_x2 - enclose_x1
+#         enclose_h = enclose_y2 - enclose_y1
+#         enclose_diag = enclose_w ** 2 + enclose_h ** 2 + eps
+#
+#         # 3. 中心点距离损失
+#         center_dist = (pred_x - target_x) ** 2 + (pred_y - target_y) ** 2
+#         center_loss = center_dist / enclose_diag
+#
+#         # 4. 宽高差异损失 (EIoU 核心改进)
+#         w_loss = (pred_w - target_w) ** 2 / (enclose_w ** 2 + eps)
+#         h_loss = (pred_h - target_h) ** 2 / (enclose_h ** 2 + eps)
+#
+#         # 总 EIoU 损失
+#         loss = 1 - iou + center_loss + w_loss + h_loss
+#         return loss  # (N,)
+#
+#     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes,
+#                 target_scores, target_scores_sum, fg_mask, imgsz, stride):
+#         """计算边界框损失"""
+#         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)  # (num_fg, 1)
+#
+#         if self.use_eiou:
+#             # EIoU 损失
+#             iou_loss_per_sample = self._eiou_loss(
+#                 pred_bboxes[fg_mask], target_bboxes[fg_mask]
+#             ).unsqueeze(-1)
+#             loss_iou = (iou_loss_per_sample * weight).sum() / target_scores_sum
+#         else:
+#             # 原始 CIoU
+#             iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
+#             loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
+#
+#         # DFL 损失（保持不变）
+#         if self.dfl_loss:
+#             target_ltrb = bbox2dist(anchor_points, target_bboxes, self.dfl_loss.reg_max - 1)
+#             loss_dfl = self.dfl_loss(pred_dist[fg_mask].view(-1, self.dfl_loss.reg_max), target_ltrb[fg_mask]) * weight
+#             loss_dfl = loss_dfl.sum() / target_scores_sum
+#         else:
+#             # 无 DFL 时的 L1 损失
+#             target_ltrb = bbox2dist(anchor_points, target_bboxes)
+#             target_ltrb = target_ltrb * stride
+#             target_ltrb[..., 0::2] /= imgsz[1]
+#             target_ltrb[..., 1::2] /= imgsz[0]
+#             pred_dist = pred_dist * stride
+#             pred_dist[..., 0::2] /= imgsz[1]
+#             pred_dist[..., 1::2] /= imgsz[0]
+#             loss_dfl = (
+#                 F.l1_loss(pred_dist[fg_mask], target_ltrb[fg_mask], reduction="none").mean(-1, keepdim=True) * weight
+#             )
+#             loss_dfl = loss_dfl.sum() / target_scores_sum
+#
+#         return loss_iou, loss_dfl
+
+# class BboxLoss(nn.Module):
+#
+#     def __init__(self, reg_max: int = 16, use_wiou: bool = True):
+#         """
+#         Initialize the BboxLoss module.
+#         Args:
+#             reg_max: Regularization maximum for DFL.
+#             use_wiou: Whether to use WIoU loss (otherwise use CIoU).
+#         """
+#         super().__init__()
+#         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
+#         self.use_wiou = use_wiou
+#
+#     def _wiou_loss(self, pred_bboxes, target_bboxes, monotonous=False, eps=1e-7):
+#         """
+#         Compute WIoU loss for each sample.
+#         Args:
+#             pred_bboxes: (N, 4) predicted boxes in xyxy format.
+#             target_bboxes: (N, 4) target boxes in xyxy format.
+#         Returns:
+#             loss: (N,) per-sample WIoU loss.
+#         """
+#         # Convert xyxy to center format for distance calculation
+#         pred_xy = (pred_bboxes[:, :2] + pred_bboxes[:, 2:4]) / 2
+#         pred_wh = pred_bboxes[:, 2:4] - pred_bboxes[:, :2]
+#         target_xy = (target_bboxes[:, :2] + target_bboxes[:, 2:4]) / 2
+#         target_wh = target_bboxes[:, 2:4] - target_bboxes[:, :2]
+#
+#         # IoU
+#         inter_x1 = torch.max(pred_bboxes[:, 0], target_bboxes[:, 0])
+#         inter_y1 = torch.max(pred_bboxes[:, 1], target_bboxes[:, 1])
+#         inter_x2 = torch.min(pred_bboxes[:, 2], target_bboxes[:, 2])
+#         inter_y2 = torch.min(pred_bboxes[:, 3], target_bboxes[:, 3])
+#         inter_area = torch.clamp(inter_x2 - inter_x1, min=0) * torch.clamp(inter_y2 - inter_y1, min=0)
+#         pred_area = pred_wh[:, 0] * pred_wh[:, 1]
+#         target_area = target_wh[:, 0] * target_wh[:, 1]
+#         union_area = pred_area + target_area - inter_area + eps
+#         iou = inter_area / union_area
+#
+#         # Center distance
+#         center_dist = (pred_xy - target_xy).pow(2).sum(dim=1)  # (N,)
+#
+#         # Minimum enclosing box
+#         enclose_x1 = torch.min(pred_bboxes[:, 0], target_bboxes[:, 0])
+#         enclose_y1 = torch.min(pred_bboxes[:, 1], target_bboxes[:, 1])
+#         enclose_x2 = torch.max(pred_bboxes[:, 2], target_bboxes[:, 2])
+#         enclose_y2 = torch.max(pred_bboxes[:, 3], target_bboxes[:, 3])
+#         enclose_diag = ((enclose_x2 - enclose_x1) ** 2 + (enclose_y2 - enclose_y1) ** 2) + eps
+#
+#         # WIoU v1: distance attention
+#         wiou_term = torch.exp(center_dist / enclose_diag)  # (N,)
+#         loss_iou = 1 - iou  # (N,)
+#
+#         if not monotonous:
+#             # WIoU v3: dynamic non-monotonic focusing
+#             with torch.no_grad():
+#                 loss_iou_mean = loss_iou.mean().detach()
+#                 beta = loss_iou / (loss_iou_mean + eps)
+#                 delta = torch.mean(beta)  # Simplified, can adjust
+#                 alpha = 1.5
+#                 r = beta / (delta * alpha ** (beta - delta))
+#                 r = torch.clamp(r, max=3.0)
+#             loss = r * wiou_term * loss_iou
+#         else:
+#             loss = wiou_term * loss_iou
+#
+#         return loss  # (N,)
+#
+#     def forward(
+#         self,
+#         pred_dist: torch.Tensor,
+#         pred_bboxes: torch.Tensor,
+#         anchor_points: torch.Tensor,
+#         target_bboxes: torch.Tensor,
+#         target_scores: torch.Tensor,
+#         target_scores_sum: torch.Tensor,
+#         fg_mask: torch.Tensor,
+#         imgsz: torch.Tensor,
+#         stride: torch.Tensor,
+#     ) -> tuple[torch.Tensor, torch.Tensor]:
+#         """Compute IoU and DFL losses for bounding boxes."""
+#         # Get weights from target scores
+#         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)  # (num_fg, 1)
+#
+#         if self.use_wiou:
+#             # Compute WIoU loss per sample
+#             iou_loss_per_sample = self._wiou_loss(
+#                 pred_bboxes[fg_mask], target_bboxes[fg_mask], monotonous=False
+#             ).unsqueeze(-1)  # (num_fg, 1)
+#             loss_iou = (iou_loss_per_sample * weight).sum() / target_scores_sum
+#         else:
+#             # Original CIoU
+#             iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
+#             loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
+#
+#         # DFL loss (unchanged)
+#         if self.dfl_loss:
+#             target_ltrb = bbox2dist(anchor_points, target_bboxes, self.dfl_loss.reg_max - 1)
+#             loss_dfl = self.dfl_loss(pred_dist[fg_mask].view(-1, self.dfl_loss.reg_max), target_ltrb[fg_mask]) * weight
+#             loss_dfl = loss_dfl.sum() / target_scores_sum
+#         else:
+#             target_ltrb = bbox2dist(anchor_points, target_bboxes)
+#             target_ltrb = target_ltrb * stride
+#             target_ltrb[..., 0::2] /= imgsz[1]
+#             target_ltrb[..., 1::2] /= imgsz[0]
+#             pred_dist = pred_dist * stride
+#             pred_dist[..., 0::2] /= imgsz[1]
+#             pred_dist[..., 1::2] /= imgsz[0]
+#             loss_dfl = (
+#                 F.l1_loss(pred_dist[fg_mask], target_ltrb[fg_mask], reduction="none").mean(-1, keepdim=True) * weight
+#             )
+#             loss_dfl = loss_dfl.sum() / target_scores_sum
+#
+#         return loss_iou, loss_dfl
 
 class BboxLoss(nn.Module):
     """Criterion class for computing training losses for bounding boxes."""
@@ -1242,3 +1649,19 @@ class TVPSegmentLoss(TVPDetectLoss):
         vp_loss = self.vp_criterion(preds, batch)
         cls_loss = vp_loss[0][2]
         return cls_loss, vp_loss[1]
+
+class LoadBalanceLoss(v8DetectionLoss):
+    def __init__(self, model):
+        # model 是 DetectionModel 实例（即网络本身）
+        super().__init__(model)   # 直接传给父类，因为父类需要模型
+        # 收集所有 MoE 模块
+        self.moe_modules = [m for m in model.modules() if hasattr(m, 'load_balancing_loss')]
+
+    def __call__(self, preds, batch):
+        total_loss, loss_items = super().__call__(preds, batch)
+        lb_loss = 0.0
+        for moe in self.moe_modules:
+            lb_loss += moe.load_balancing_loss()
+            moe.reset_usage()
+        total_loss += lb_loss
+        return total_loss, loss_items

@@ -455,8 +455,8 @@ def convert_dota_to_yolo_obb(dota_root_path: str):
 
     # Class names to indices mapping
     class_mapping = {
-        "plane": 0,
-        "ship": 1,
+        "plane": 1,
+        "ship": 0,
         "storage-tank": 2,
         "baseball-diamond": 3,
         "tennis-court": 4,

@@ -17,6 +17,48 @@ Examples:
     >>> subprocess.run(f"onnxslim {f} {f} && open {f}", shell=True, check=True)  # pip install onnxslim
 """
 
+# from .backbone.lsknet import LSKNet
+# from .IndexSelector import IndexSelector
+from .seNet import SEAttention
+from .CPFNet import EVCBlock
+from ultralytics.nn.modules.hwd import HWD
+from .lsknet import LSK,C3k2_LSK
+from ultralytics.nn.modules.fmb import FMB
+from ultralytics.nn.modules.simam import SimAM,C3k2_SimAM
+from ultralytics.nn.modules.coordatt import CoordAtt, C3k2_CA
+from ultralytics.nn.modules.WTConv import WTConv2d,C3k2_WT
+from ultralytics.nn.modules.shsa import SHSA
+
+from ultralytics.nn.modules.mobilemqa import A2C2f_MobileMQA
+from ultralytics.nn.modules.WeightedP2Fusion import WeightedP2Fusion
+from ultralytics.nn.modules.SCSA import A2C2f_SCSA,C2PSA_SCSA
+from ultralytics.nn.modules.CSPPConv import CSP_PConv
+from ultralytics.nn.modules.AdaptiveResidualFusion import AdaptiveResidualFusion
+from ultralytics.nn.modules.spapf import SPAPF
+from ultralytics.nn.modules.DyHead import DyHead
+from ultralytics.nn.modules.SPPF_LSKA import SPPF_LSKA
+from ultralytics.nn.modules.DynamicMultiBranch import DynamicPartialIdentity,DynamicWaveletAttentionIdentity,DynamicWaveletIdentity
+from ultralytics.nn.modules.DepthwiseSeparableConv import DepthwiseSeparableConvWithWTConv2d
+from ultralytics.nn.modules.DyUpsample import DySample
+from ultralytics.nn.modules.MoE import MoEBlock,AttMoE,ConvMoE
+from ultralytics.nn.modules.DySPPF import DynamicSPPF
+from ultralytics.nn.modules.RFAConv import RFAConv
+from ultralytics.nn.modules.DPConv import DPConv,DPConvBlock
+from ultralytics.nn.modules.TernaryDPConv import TernaryDPConv
+from ultralytics.nn.modules.SmartAreaAttention import SmartAreaAttention
+from ultralytics.nn.modules.SaveFirstImage import SaveFirstImage
+from ultralytics.nn.modules.BiDirectionalTGFI import BiDirectionalTGFI,BiDirectionalTGFIBlock
+from ultralytics.nn.modules.BackgroundSuppression import BackgroundSuppression
+from ultralytics.nn.modules.TernaryMoEBlock import TernaryMoEBlock
+from ultralytics.nn.modules.DeterministicGateConv import DeterministicGateConv
+from ultralytics.nn.modules.GatedC3k2 import GatedC3k2
+from ultralytics.nn.modules.WTGatedC3k2 import WTGatedC3k2
+from ultralytics.nn.modules.HIPA import HIPA
+from ultralytics.nn.modules.HIPAV2 import HIPAV2
+from ultralytics.nn.modules.WaveletStem import WaveletStem
+
+
+
 from .block import (
     C1,
     C2,
@@ -59,6 +101,9 @@ from .block import (
     ResNetLayer,
     SCDown,
     TorchVision,
+
+    VisionTransformer,
+
 )
 from .conv import (
     CBAM,
@@ -187,4 +232,16 @@ __all__ = (
     "YOLOESegment",
     "YOLOESegment26",
     "v10Detect",
+
+    # "LSKNet",
+    # "IndexSelector"
+
+    "SEAttention",
+    "HWD",
+    "LSK",
+    "C3k2_LSK",
+    "FMB",
+    "SimAM",
+    "C3k2_SimAM",
+    "CoordAtt"
 )
