@@ -70,7 +70,7 @@ Validate a trained YOLO26n model [accuracy](https://www.ultralytics.com/glossary
         metrics.box.map50  # map50
         metrics.box.map75  # map75
         metrics.box.maps  # a list containing mAP50-95 for each category
-        metrics.box.image_metrics  # per-image precision and recall dictionary
+        metrics.box.image_metrics  # per-image metrics dictionary with precision, recall, F1, TP, FP, and FN
         ```
 
     === "CLI"
@@ -140,8 +140,9 @@ The below examples showcase YOLO model validation with custom arguments in Pytho
 
 !!! tip "Per-Image Precision, Recall, and F1"
 
-    Validation stores per-image precision, recall, and F1 metrics (at IoU threshold 0.5) for all tasks except classification.
-    Access these metrics through `results.box.image_metrics` after validation completes.
+    Validation stores per-image precision, recall, F1, TP, FP, and FN metrics (at IoU threshold 0.5) for all tasks
+    except classification. Access them through `results.box.image_metrics` for detection and OBB, `results.seg.image_metrics`
+    for segmentation, and `results.pose.image_metrics` for pose after validation completes.
 
     ```python
     from ultralytics import YOLO
@@ -152,14 +153,12 @@ The below examples showcase YOLO model validation with custom arguments in Pytho
     # Validate and access per-image metrics
     results = model.val(data="coco8.yaml")
 
-    # image_metrics is a dictionary with image paths as keys
+    # image_metrics is a dictionary with image filenames as keys
     print(results.box.image_metrics)
-    # Output: {'/path/to/image1.jpg': {'precision': 0.85, 'recall': 0.92, 'f1': 0.88, 'tp': 17, 'fp': 3, 'fn': 1}, ...}
+    # Output: {'image1.jpg': {'precision': 0.85, 'recall': 0.92, 'f1': 0.88, 'tp': 17, 'fp': 3, 'fn': 1}, ...}
 
     # Access metrics for a specific image
-    results.box.image_metrics[
-        "/path/to/image1.jpg"
-    ]  # {'precision': 0.85, 'recall': 0.92, 'f1': 0.88, 'tp': 17, 'fp': 3, 'fn': 1}
+    results.box.image_metrics["image1.jpg"]  # {'precision': 0.85, 'recall': 0.92, 'f1': 0.88, 'tp': 17, 'fp': 3, 'fn': 1}
     ```
 
     Each entry in `image_metrics` contains the following keys:
@@ -225,7 +224,7 @@ print(metrics.box.map)  # mAP50-95
 print(metrics.box.map50)  # mAP50
 print(metrics.box.map75)  # mAP75
 print(metrics.box.maps)  # list of mAP50-95 for each category
-print(metrics.box.image_metrics)  # per-image precision and recall dictionary
+print(metrics.box.image_metrics)  # per-image metrics dictionary with precision, recall, F1, TP, FP, and FN
 ```
 
 For a complete performance evaluation, it's crucial to review all these metrics. For more details, refer to the [Key Features of Val Mode](#key-features-of-val-mode).

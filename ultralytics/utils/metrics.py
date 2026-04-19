@@ -996,7 +996,7 @@ class Metric(SimpleClass):
 
     def clear_image_metrics(self) -> None:
         """Clear stored per-image metrics from the current validation run."""
-        self.image_metrics = {}
+        self.image_metrics.clear()
 
     @property
     def curves(self) -> list:
@@ -1013,21 +1013,17 @@ class Metric(SimpleClass):
             [self.px, self.r_curve, "Confidence", "Recall"],
         ]
 
-    def pr_per_image(self, tp: np.ndarray, target_cls: np.ndarray, pred_cls: np.ndarray, im_file: str) -> None:
-        """Calculate per-image precision and recall at IoU threshold of 0.5.
-
-        Computes precision and recall for a single image based on true positive matches,
-        ground truth class labels, and predicted class labels, then appends the results
-        to `self.image_metrics`.
+    def update_image_metrics(self, tp: np.ndarray, target_cls: np.ndarray, pred_cls: np.ndarray, im_name: str) -> None:
+        """Update per-image precision, recall, F1, TP, FP, and FN at IoU threshold 0.5.
 
         Args:
             tp (np.ndarray): True positive array of shape (num_preds, num_iou_thresholds), where the first column (IoU
                 >= 0.5) is used.
             target_cls (np.ndarray): Ground truth class labels for the image.
             pred_cls (np.ndarray): Predicted class labels for the image.
-            im_file (str): The image path, used as a stable per-image key.
+            im_name (str): The image filename used as the per-image key.
         """
-        # pick the tp with iou > 0.5 by default
+        # Use the default IoU=0.5 column to match the validator's image-level matching policy.
         tp = int(tp[:, 0].sum())
         num_preds = pred_cls.shape[0]
         num_targets = target_cls.shape[0]
@@ -1035,7 +1031,7 @@ class Metric(SimpleClass):
         fn = num_targets - tp
         precision = tp / num_preds if num_preds else 0
         recall = tp / num_targets if num_targets else 0
-        self.image_metrics[im_file] = {
+        self.image_metrics[im_name] = {
             "precision": float(precision),
             "recall": float(recall),
             "f1": float(2 * (precision * recall) / (precision + recall)) if (precision + recall) else 0.0,
@@ -1095,7 +1091,7 @@ class DetMetrics(SimpleClass, DataExportMixin):
         """
         for k in self.stats.keys():
             self.stats[k].append(stat[k])
-        self.box.pr_per_image(stat["tp"], stat["target_cls"], stat["pred_cls"], stat["im_file"])
+        self.box.update_image_metrics(stat["tp"], stat["target_cls"], stat["pred_cls"], stat["im_name"])
 
     def process(self, save_dir: Path = Path("."), plot: bool = False, on_plot=None) -> dict[str, np.ndarray]:
         """Process predicted results for object detection and update metrics.
@@ -1260,7 +1256,7 @@ class SegmentMetrics(DetMetrics):
                 keys in self.stats.
         """
         super().update_stats(stat)  # update box stats
-        self.seg.pr_per_image(stat["tp_m"], stat["target_cls"], stat["pred_cls"], stat["im_file"])  # update mask stats
+        self.seg.update_image_metrics(stat["tp_m"], stat["target_cls"], stat["pred_cls"], stat["im_name"])
 
     def clear_image_metrics(self) -> None:
         """Clear stored per-image metrics."""
@@ -1411,7 +1407,7 @@ class PoseMetrics(DetMetrics):
                 keys in self.stats.
         """
         super().update_stats(stat)  # update box stats
-        self.pose.pr_per_image(stat["tp_p"], stat["target_cls"], stat["pred_cls"], stat["im_file"])
+        self.pose.update_image_metrics(stat["tp_p"], stat["target_cls"], stat["pred_cls"], stat["im_name"])
 
     def clear_image_metrics(self) -> None:
         """Clear stored per-image metrics."""
