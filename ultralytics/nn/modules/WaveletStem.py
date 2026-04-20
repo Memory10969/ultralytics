@@ -47,10 +47,10 @@ class SubbandDenoise(nn.Module):
         self.ll_alpha = nn.Parameter(torch.tensor(2.0))
 
         # LH/HL 阈值初始为负值，使 softplus 输出接近 0
-        self.lh_hl_thr = nn.Parameter(torch.tensor(-5.0))  # softplus(-4)≈0.018
+        self.lh_hl_thr = nn.Parameter(torch.tensor(-4.0))  # softplus(-4)≈0.018
 
         # HH 阈值同样初始为负值
-        self.hh_thr = nn.Parameter(torch.full((channels,), -5.0))
+        self.hh_thr = nn.Parameter(torch.full((channels,), -4.0))
 
     def forward(self, coeffs: torch.Tensor) -> torch.Tensor:
         """
