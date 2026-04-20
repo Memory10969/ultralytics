@@ -1,7 +1,7 @@
 names:
   0: ship
 nc: 1
-path: D:\Study\PostGraduate\YOLO\datasets\HRSID_YOLO
+path: ../datasets/HRSID_YOLO
 train: images/train
 val: images/val
 test: images/val
